@@ -28,7 +28,29 @@ class ChangelogEntry(object):
     - mtime, ctime: Times modified and created, respectively (I assume)
     """
 
-    def __init__(self, triplet):
+    def __init__(self, **kwargs):
+        """Create a ChangelogEntry with given arguments."""
+        self.time = kwargs.pop('time')
+        if isinstance(self.time, str):
+            self.time = datetime.strptime(self.time, TIME_FORMAT)
+        self.action = kwargs.pop('action')
+        self.target = kwargs.pop('target')
+        self.type = kwargs.pop('type')
+        self.mode = kwargs.pop('mode')
+        self.uid = kwargs.pop('uid')
+        self.gid = kwargs.pop('gid')
+        self.size = kwargs.pop('size')
+        self.mtime = kwargs.pop('mtime')
+        if isinstance(self.mtime, str):
+            self.mtime = datetime.strptime(self.mtime, TIME_FORMAT)
+        self.ctime = kwargs.pop('ctime')
+        if isinstance(self.ctime, str):
+            self.ctime = datetime.strptime(self.ctime, TIME_FORMAT)
+        if kwargs:
+            raise ValueError('too many arguments to ChangelogEntry()')
+
+    @staticmethod
+    def parse(triplet):
         """Create Changelog Entry using triplet of string lines."""
         # Regular expression construction for a changelog entry.
         time_re = r'[a-zA-Z]{3} [a-zA-Z]{3}\s+\d+ \d\d:\d\d:\d\d \d{4}'
@@ -41,29 +63,23 @@ class ChangelogEntry(object):
         final_re = '\n'.join([l1, l2, l3])
 
         # Match the regular expression against the input.
-        self.string = '\n'.join(triplet)
-        match = re.fullmatch(final_re, self.string)
+        string = '\n'.join(triplet)
+        match = re.fullmatch(final_re, string)
         if match is None:
             raise ParseError('SpiderOak output matched incorrectly.')
 
         # Update this object with the captured groups.
-        self.__dict__.update(match.groupdict())
-
-        # Convert to expected data types for each captured value
-        self.time = datetime.strptime(self.time, TIME_FORMAT)
-        self.mtime = datetime.strptime(self.mtime, TIME_FORMAT)
-        self.ctime = datetime.strptime(self.ctime, TIME_FORMAT)
-        self.mode = int(self.mode)
-        self.uid = int(self.uid)
-        self.gid = int(self.gid)
-        self.size = int(self.size)
+        capture = match.groupdict()
+        del capture['q']
+        return ChangelogEntry(**capture)
 
     def __str__(self):
-        return '<ChangelogEntry: %r at %s>' % \
-            (self.target, self.time.strftime(TIME_FORMAT))
+        return '<ChangelogEntry: %s %r at %s>' % \
+            (self.action, self.target, self.time.strftime(TIME_FORMAT))
 
     def __repr__(self):
-        return self.string
+        return 'ChangelogEntry(' + \
+            ', '.join(['%s=%r' % x for x in self.__dict__.items()]) + ')'
 
 
 def n_tuples(l, n=2):
@@ -92,7 +108,7 @@ def journal_changelog(folder):
     output = check_output(['SpiderOak', '--journal-changelog', folder],
                           universal_newlines=True)
     lines = output.split('\n')
-    entries = [ChangelogEntry(t) for t in n_tuples(lines, n=3)]
+    entries = [ChangelogEntry.parse(t) for t in n_tuples(lines, n=3)]
     return entries
 
 
