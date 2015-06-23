@@ -28,43 +28,79 @@ class ChangelogEntry(object):
     - mtime, ctime: Times modified and created, respectively (I assume)
     """
 
+    __regex = None
+
+    def _set_datetime(self, kwargs, name):
+        v = kwargs.pop(name)
+        if isinstance(v, str):
+            v = datetime.strptime(v, TIME_FORMAT)
+        setattr(self, name, v)
+
     def __init__(self, **kwargs):
         """Create a ChangelogEntry with given arguments."""
-        self.time = kwargs.pop('time')
-        if isinstance(self.time, str):
-            self.time = datetime.strptime(self.time, TIME_FORMAT)
-        self.action = kwargs.pop('action')
-        self.target = kwargs.pop('target')
-        self.type = kwargs.pop('type')
-        self.mode = kwargs.pop('mode')
-        self.uid = kwargs.pop('uid')
-        self.gid = kwargs.pop('gid')
-        self.size = kwargs.pop('size')
-        self.mtime = kwargs.pop('mtime')
-        if isinstance(self.mtime, str):
-            self.mtime = datetime.strptime(self.mtime, TIME_FORMAT)
-        self.ctime = kwargs.pop('ctime')
-        if isinstance(self.ctime, str):
-            self.ctime = datetime.strptime(self.ctime, TIME_FORMAT)
+        self._set_datetime(kwargs, 'time')
+        self.action = str(kwargs.pop('action'))
+        self.target = str(kwargs.pop('target'))
+        self.type = str(kwargs.pop('type'))
+        self.mode = int(kwargs.pop('mode'))
+        self.uid = int(kwargs.pop('uid'))
+        self.gid = int(kwargs.pop('gid'))
+        self.size = int(kwargs.pop('size'))
+        self._set_datetime(kwargs, 'mtime')
+        self._set_datetime(kwargs, 'ctime')
         if kwargs:
             raise ValueError('too many arguments to ChangelogEntry()')
 
-    @staticmethod
-    def parse(triplet):
-        """Create Changelog Entry using triplet of string lines."""
-        # Regular expression construction for a changelog entry.
-        time_re = r'[a-zA-Z]{3} [a-zA-Z]{3}\s+\d+ \d\d:\d\d:\d\d \d{4}'
-        l1 = r'(?P<time>' + time_re + ')' r':\s+(?P<action>\w+)\s+u'\
-             '(?P<q>\'|")' r'(?P<target>.*)(?P=q)'
-        l2 = r'\s*type:(?P<type>\w+)\s+mode:(?P<mode>\d+)\s+uid:(?P<uid>\d+)' \
-             r'\s+gid:(?P<gid>\d+)\s+size:(?P<size>\d+)'
-        l3 = r'\s*mtime:(?P<mtime>' + time_re + r')\s+ctime:(?P<ctime>' + \
-             time_re + r')'
+    @classmethod
+    def regex(cls):
+        """Return the regular expression for a ChangelogEntry."""
+        if cls.__regex is not None:
+            return cls.__regex
+
+        # Regular expression for a time
+        time_re = (
+            r'[a-zA-Z]{3}\s+'        # Month (eg Jun)
+            r'[a-zA-Z]{3}\s+'        # Day   (eg Mon)
+            r'\d+\s+'                # Day of month (eg 1 or 20)
+            r'\d\d:\d\d:\d\d \d{4}'  # hour:minute:second year
+        )
+
+        # l1 eg: Mon Jun 1 12:34:56 2015: add u'blah blah blah.pdf'
+        l1 = (
+            r'(?P<time>' + time_re + '):\s+'  # capture the time
+            r'(?P<action>\w+)\s+'             # capture the action
+            'u(?P<q>\'|")'                    # capture the quoting style
+            r'(?P<target>.*)'                 # capture the filename
+            r'(?P=q)'                         # match consistent quote
+        )
+        # l2 eg:   type:add mode:123456 uid:1000 gid:1000 size:4096
+        l2 = (
+            r'\s*'                       # consume initial whitespace
+            r'type:(?P<type>\w+)\s+'     # type (has whitespace in front)
+            r'mode:(?P<mode>\d+)\s+'     # mode (integer)
+            r'uid:(?P<uid>\d+)\s+'       # uid (integer)
+            r'gid:(?P<gid>\d+)\s+'       # gid (integer)
+            r'size:(?P<size>\d+)'        # size (integer)
+        )
+        # l3 eg:   mtime:Mon Jun 1 12:34:56 2015  ctime:Mon Jun 1 12:34:56 2015
+        l3 = (
+            r'\s*'                                   # consume whitespace
+            r'mtime:(?P<mtime>' + time_re + r')\s+'  # mtime
+            r'ctime:(?P<ctime>' + time_re + r')'     # ctime
+        )
+
+        # Combine the three lines into a single regular expression.
         final_re = '\n'.join([l1, l2, l3])
 
+        cls.__regex = re.compile(final_re)
+        return cls.__regex
+
+    @classmethod
+    def parse(cls, triplet):
+        """Create Changelog Entry using triplet of string lines."""
         # Match the regular expression against the input.
         string = '\n'.join(triplet)
-        match = re.fullmatch(final_re, string)
+        match = cls.regex().fullmatch(string)
         if match is None:
             raise ParseError('SpiderOak output matched incorrectly.')
 
