@@ -6,6 +6,8 @@ from datetime import datetime
 import re
 import os.path
 
+TIME_FORMAT = '%a %b %d %H:%M:%S %Y'
+
 
 class ParseError(ValueError):
     """An exception to raise when parsing stuff."""
@@ -28,9 +30,6 @@ class ChangelogEntry(object):
 
     def __init__(self, triplet):
         """Create Changelog Entry using triplet of string lines."""
-        # Format string for parsing times using strptime.
-        time_format = '%a %b %d %H:%M:%S %Y'
-
         # Regular expression construction for a changelog entry.
         time_re = r'[a-zA-Z]{3} [a-zA-Z]{3}\s+\d+ \d\d:\d\d:\d\d \d{4}'
         l1 = r'(?P<time>' + time_re + ')' r':\s+(?P<action>\w+)\s+u'\
@@ -42,8 +41,8 @@ class ChangelogEntry(object):
         final_re = '\n'.join([l1, l2, l3])
 
         # Match the regular expression against the input.
-        string = '\n'.join(triplet)
-        match = re.fullmatch(final_re, string)
+        self.string = '\n'.join(triplet)
+        match = re.fullmatch(final_re, self.string)
         if match is None:
             raise ParseError('SpiderOak output matched incorrectly.')
 
@@ -51,13 +50,20 @@ class ChangelogEntry(object):
         self.__dict__.update(match.groupdict())
 
         # Convert to expected data types for each captured value
-        self.time = datetime.strptime(self.time, time_format)
-        self.mtime = datetime.strptime(self.mtime, time_format)
-        self.ctime = datetime.strptime(self.ctime, time_format)
+        self.time = datetime.strptime(self.time, TIME_FORMAT)
+        self.mtime = datetime.strptime(self.mtime, TIME_FORMAT)
+        self.ctime = datetime.strptime(self.ctime, TIME_FORMAT)
         self.mode = int(self.mode)
         self.uid = int(self.uid)
         self.gid = int(self.gid)
         self.size = int(self.size)
+
+    def __str__(self):
+        return '<ChangelogEntry: %r at %s>' % \
+            (self.target, self.time.strftime(TIME_FORMAT))
+
+    def __repr__(self):
+        return self.string
 
 
 def n_tuples(l, n=2):
