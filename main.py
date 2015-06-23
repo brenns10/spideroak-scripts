@@ -22,7 +22,7 @@ def main():
     for f in filenames:
         ln = last_nonzero(f)
         if ln is None:
-            print('file %s was NEVER nonzero')
+            print('*file %s was NEVER nonzero')
         else:
             print('file %s was %d bytes at %r' % (f, ln.size, ln.time))
 
